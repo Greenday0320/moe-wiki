@@ -11,20 +11,17 @@
 - (2026-07-30) **중요 버그 수정**: `is_title_chunk()`가 제목 앞 8글자가 본문 "어디에" 있든 매칭해버려서, 제목의 키워드가 본문 중간에 재등장하면(예: 제목이 "3대 메가프로젝트..."인데 본문 뒷부분에서도 "3대 메가프로젝트 관련 분야에서는"처럼 다시 언급되는 경우) 그 문단 전체가 통째로 사라지는 버그가 있었음. 문단이 제목으로 "시작하는지"만 보도록 고쳐서(`startswith`) 42건 전체 재빌드함 — 이 버그로 인해 이전에 빠졌던 문단들이 복원됨.
 - (2026-07-30) 모바일 CSS 개선(`assets/style.css`의 `@media (max-width: 600px)` 블록): 여백/폰트크기/터치 영역 확대, 표 가로스크롤 관성 스크롤 추가. 레이아웃/색상 구조는 그대로(나무위키 스타일 유지 요청에 따름).
 - (2026-07-30) **디자인 전면 개편**: "백과사전식/수수함" 피드백에 따라 카드형 레이아웃(분류=카드 그리드, 문서목록=카드 리스트)으로 교체, 인디고 포인트 컬러(`--accent`) 도입. `generate_wiki.py`의 INDEX_TEMPLATE/CATEGORY_PAGE_TEMPLATE/PAGE_TEMPLATE 및 `assets/style.css` 전면 수정. (처음엔 Pretendard 폰트를 외부 CDN `@import`로 불러왔었는데, 카카오톡 인앱 브라우저에서 그 요청이 막히면서 CSS 전체가 안 먹는 문제가 있어서 **외부 리소스 의존성 없이 시스템 폰트만 쓰도록 되돌림** — 외부 CDN @import/폰트는 다시 넣지 말 것.)
-- (2026-07-30) **GitHub Pages로 배포 완료**: https://greenday0320.github.io/moe-wiki/ — 정식 HTTPS 주소라 카톡 포함 어디서든 정상 작동. GitHub 저장소: https://github.com/Greenday0320/moe-wiki (계정 Greenday0320, `gh` CLI 인증 완료된 상태). 로컬 LAN 서버(`python -m http.server`)와 Cloudflare 임시 터널(`cloudflared`)은 배포 전 모바일 테스트용으로 잠깐 썼던 것이고 지금은 정리(kill)해서 안 떠 있음 — 이제 필요 없음, 로컬 미리보기가 필요하면 다시 `python -m http.server 8000` 실행하면 됨.
-
-### 사이트 업데이트(재배포) 방법
-로컬에서 `data/*.md`·`category_map.json`·`generate_wiki.py` 등을 고치고 페이지를 다시 만든 뒤:
-```
-cd "C:\Users\82103\Desktop\교육부위키"
-git add -A
-git commit -m "설명"
-git push
-```
-푸시하면 GitHub Pages가 자동으로 다시 빌드한다(보통 30초~1분). `gh`는 이미 `Greenday0320` 계정으로 인증되어 있어서 별도 로그인 불필요.
+- (2026-07-30) **GitHub Pages로 배포 완료**: https://greenday0320.github.io/moe-wiki/ — 정식 HTTPS 주소라 카톡 포함 어디서든 정상 작동. 로컬 LAN 서버(`python -m http.server`)와 Cloudflare 임시 터널(`cloudflared`)은 배포 전 모바일 테스트용으로 잠깐 썼던 것이고 지금은 정리(kill)해서 안 떠 있음 — 더 이상 필요 없음. 자세한 배포/업데이트 방법은 아래 "⚠️" 섹션 참고.
 
 ## 새 채팅방에서 할 말 (예시)
-> "C:\Users\82103\Desktop\교육부위키 프로젝트 이어서 작업할 거야. CONTINUE.md 읽고 최근 N일치 보도자료 추가로 처리해줘."
+> "C:\Users\82103\Desktop\교육부위키 프로젝트 이어서 작업할 거야. CONTINUE.md 읽고 최근 N일치 보도자료 추가로 처리해줘. 다 되면 git push까지 해서 GitHub Pages에 반영해줘."
+
+## ⚠️ 이 프로젝트는 GitHub에 배포되어 있음 — 로컬 수정만으로는 사이트가 안 바뀜
+- 라이브 사이트: **https://greenday0320.github.io/moe-wiki/**
+- 저장소: **https://github.com/Greenday0320/moe-wiki** (기본 브랜치 이름 `master`, `main` 아님)
+- `gh` CLI가 이미 `Greenday0320` 계정으로 인증돼 있어서(`gh auth status`로 확인 가능) 로그인 절차 없이 바로 push 가능.
+- **로컬에서 파일을 아무리 고치고 `generate_wiki.py`를 다시 돌려도, `git add -A && git commit -m "..." && git push`를 안 하면 실제 사이트(위 URL)에는 반영 안 됨.** 작업을 마칠 때마다 잊지 말고 push할 것. (사용자가 명시적으로 "로컬에서만 보겠다"고 하지 않는 한, 의미 있는 변경 후에는 push까지 하는 게 기본 기대치임.)
+- 로컬에서 미리보기만 하고 싶으면 `python -m http.server 8000` 실행 후 `http://localhost:8000` (배포와 무관하게 그냥 확인용).
 
 ## 파이프라인 구조 (반드시 이 순서로)
 1. **`fetch_batch.py --days N`** — 목록 페이지 스크래핑 + 첨부파일(hwp/hwpx/pdf) 자동 다운로드. 순수 파이썬, kordoc 불필요. 이미 받은 파일은 재다운로드 안 함. 결과는 `data/_batch_manifest.json`에 누적 기록.
@@ -34,6 +31,7 @@ git push
    - `python generate_wiki.py --ingest <boardSeq>` — manifest에서 제목/날짜 가져오고, 담당부서 표에서 부서명 추출해 `data/<boardSeq>.meta.json` 생성
    - `python generate_wiki.py <boardSeq>` — 실제 위키 HTML(`articles/<boardSeq>.html`) 생성
 3. 전부 끝나면 **`python generate_wiki.py --rebuild-index`** — `index.html` + `categories/*.html` 갱신.
+4. **`git add -A && git commit -m "..." && git push`** — 이걸 해야 실제로 배포됨 (위 경고 참고).
 
 ## 알아둘 것
 - **분류 기준**: 목록 페이지의 "담당부서"는 항상 "홍보담당관"이라 못 씀. 반드시 첨부파일 본문 안 "담당 부서" 표에서 실제 부서(예: "학교정책실 공교육진흥과")를 추출해야 함 → `generate_wiki.py`의 `extract_contact()` 함수가 담당. "책임자" 셀 바로 왼쪽 셀을 부서명으로 보는 방식이라 단독/공동 부처 발표 둘 다 대응하지만, **교육부가 아닌 타 부처가 표에서 먼저 나오는 공동 보도자료는 미분류로 빠짐** (예: 문체부·기획예산처 주관 공동자료). 이런 건 수동으로 봐줘야 함.
