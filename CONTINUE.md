@@ -12,6 +12,7 @@
 - (2026-07-30) 모바일 CSS 개선(`assets/style.css`의 `@media (max-width: 600px)` 블록): 여백/폰트크기/터치 영역 확대, 표 가로스크롤 관성 스크롤 추가. 레이아웃/색상 구조는 그대로(나무위키 스타일 유지 요청에 따름).
 - (2026-07-30) **디자인 전면 개편**: "백과사전식/수수함" 피드백에 따라 카드형 레이아웃(분류=카드 그리드, 문서목록=카드 리스트)으로 교체, 인디고 포인트 컬러(`--accent`) 도입. `generate_wiki.py`의 INDEX_TEMPLATE/CATEGORY_PAGE_TEMPLATE/PAGE_TEMPLATE 및 `assets/style.css` 전면 수정. (처음엔 Pretendard 폰트를 외부 CDN `@import`로 불러왔었는데, 카카오톡 인앱 브라우저에서 그 요청이 막히면서 CSS 전체가 안 먹는 문제가 있어서 **외부 리소스 의존성 없이 시스템 폰트만 쓰도록 되돌림** — 외부 CDN @import/폰트는 다시 넣지 말 것.)
 - (2026-07-30) **GitHub Pages로 배포 완료**: https://greenday0320.github.io/moe-wiki/ — 정식 HTTPS 주소라 카톡 포함 어디서든 정상 작동. 로컬 LAN 서버(`python -m http.server`)와 Cloudflare 임시 터널(`cloudflared`)은 배포 전 모바일 테스트용으로 잠깐 썼던 것이고 지금은 정리(kill)해서 안 떠 있음 — 더 이상 필요 없음. 자세한 배포/업데이트 방법은 아래 "⚠️" 섹션 참고.
+- (2026-07-30) **업데이트 전파 여부 확인**: `git push`만 하면 링크(URL)는 그대로 유지된 채 내용만 자동 갱신됨 — 공유받은 사람이 새 링크를 다시 받을 필요 없음. `gh api repos/Greenday0320/moe-wiki/pages` 확인 결과 `build_type: "legacy"`라 push하면 GitHub Pages가 자동 재빌드(보통 1분 내외). 단 실제 응답 헤더(`curl -sI https://greenday0320.github.io/moe-wiki/`) 확인 결과 앞단 CDN(Fastly)이 `Cache-Control: max-age=600`을 걸어두고 있어서, push 직후 방문자는 최대 약 10분간 이전 버전을 볼 수 있고 이후 자동 갱신됨(강제 새로고침 불필요). 이 캐시 헤더는 GitHub Pages 인프라가 고정으로 설정하는 값이라 저장소 쪽 설정으로 줄일 수 없음.
 
 ## 새 채팅방에서 할 말 (예시)
 > "C:\Users\82103\Desktop\교육부위키 프로젝트 이어서 작업할 거야. CONTINUE.md 읽고 최근 N일치 보도자료 추가로 처리해줘. 다 되면 git push까지 해서 GitHub Pages에 반영해줘."
