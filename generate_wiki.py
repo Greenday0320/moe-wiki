@@ -24,7 +24,7 @@ ARTICLES_DIR = ROOT / "articles"
 ASSETS_DIR = ROOT / "assets"
 CATEGORIES_DIR = ROOT / "categories"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
-CSS_VERSION = 2  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 3  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -390,9 +390,7 @@ CATEGORY_PAGE_TEMPLATE = """<!doctype html>
   <div class="wiki-breadcrumb"><a href="../index.html">교육부 위키</a> &gt; 분류</div>
   <h1 class="wiki-title">분류: {name}</h1>
 {subcats}
-  <div class="doc-card-list">
-{rows}
-  </div>
+{content}
   <div class="wiki-footer">
     <a href="../index.html">&larr; 목록으로</a>
   </div>
@@ -422,6 +420,16 @@ def _doc_card(m: dict, base: str, tag: str) -> str:
     )
 
 
+def _subcat_section(label: str, members: list[dict]) -> str:
+    rows = [_doc_card(m, "../", "") for m in members]
+    return (
+        f'  <div class="subcat-section">\n'
+        f'    <h2 class="section-label">{esc(label)}</h2>\n'
+        f'    <div class="doc-card-list">\n' + "\n".join(rows) + "\n    </div>\n"
+        f"  </div>"
+    )
+
+
 def rebuild_categories():
     metas = _collect_metas()
     CATEGORIES_DIR.mkdir(exist_ok=True)
@@ -432,12 +440,28 @@ def rebuild_categories():
         if cat["children"]:
             chips = "".join(f'<span class="chip">{esc(c)}</span>' for c in cat["children"])
             subcats_html = f'  <div class="category-subcats" style="margin-bottom:20px">{chips}</div>'
-        rows = [_doc_card(m, "../", esc(m["_sub_cat"] or "-")) for m in members]
+
+            sections = []
+            for sub in cat["children"]:
+                sub_members = [m for m in members if m["_sub_cat"] == sub]
+                if sub_members:
+                    sections.append(_subcat_section(sub, sub_members))
+            others = [m for m in members if m["_sub_cat"] not in cat["children"]]
+            if others:
+                sections.append(_subcat_section("기타", others))
+            content = "\n\n".join(sections) if sections else '  <div class="doc-empty">아직 문서 없음</div>'
+        else:
+            rows = [_doc_card(m, "../", esc(m["_sub_cat"] or "-")) for m in members]
+            content = (
+                '  <div class="doc-card-list">\n' + "\n".join(rows) + "\n  </div>"
+                if rows else '  <div class="doc-empty">아직 문서 없음</div>'
+            )
+
         html_out = CATEGORY_PAGE_TEMPLATE.format(
             css_ver=CSS_VERSION,
             name=esc(name),
             subcats=subcats_html,
-            rows="\n".join(rows) if rows else '    <div class="doc-empty">아직 문서 없음</div>',
+            content=content,
         )
         (CATEGORIES_DIR / f"{cat['id']}.html").write_text(html_out, encoding="utf-8")
 

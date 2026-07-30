@@ -119,6 +119,8 @@ a { -webkit-tap-highlight-color: rgba(54,82,217,.2); }
 }
 
 /* ---------- 문서 카드 리스트 ---------- */
+.subcat-section { margin-bottom: 28px; }
+.subcat-section:last-child { margin-bottom: 0; }
 .doc-card-list {
   display: flex;
   flex-direction: column;
