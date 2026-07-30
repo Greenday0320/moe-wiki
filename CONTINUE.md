@@ -10,6 +10,18 @@
 - (2026-07-30) **나무위키식 키워드 자동 링크** 추가: `generate_wiki.py`의 `KEYWORD_LINKS` 리스트에 `{"phrase": "문구", "targets": {소스slug: 링크할slug}}` 형태로 등록하면, 그 문구가 본문(배경 포함)에 처음 등장하는 곳만 자동으로 다른 문서 링크가 됨(`apply_keyword_links()` 함수). 지금은 43개 기존 문서끼리만 연결하는 정책이라 새 키워드 "허브 문서"는 만들지 않음 — 새 문서 추가 시 기존 문서와 겹치는 고유명사/프로그램명이 있으면 KEYWORD_LINKS에 항목을 추가할 것.
 - (2026-07-30) **중요 버그 수정**: `is_title_chunk()`가 제목 앞 8글자가 본문 "어디에" 있든 매칭해버려서, 제목의 키워드가 본문 중간에 재등장하면(예: 제목이 "3대 메가프로젝트..."인데 본문 뒷부분에서도 "3대 메가프로젝트 관련 분야에서는"처럼 다시 언급되는 경우) 그 문단 전체가 통째로 사라지는 버그가 있었음. 문단이 제목으로 "시작하는지"만 보도록 고쳐서(`startswith`) 42건 전체 재빌드함 — 이 버그로 인해 이전에 빠졌던 문단들이 복원됨.
 - (2026-07-30) 모바일 CSS 개선(`assets/style.css`의 `@media (max-width: 600px)` 블록): 여백/폰트크기/터치 영역 확대, 표 가로스크롤 관성 스크롤 추가. 레이아웃/색상 구조는 그대로(나무위키 스타일 유지 요청에 따름).
+- (2026-07-30) **디자인 전면 개편**: "백과사전식/수수함" 피드백에 따라 카드형 레이아웃(분류=카드 그리드, 문서목록=카드 리스트)으로 교체, 인디고 포인트 컬러(`--accent`) 도입. `generate_wiki.py`의 INDEX_TEMPLATE/CATEGORY_PAGE_TEMPLATE/PAGE_TEMPLATE 및 `assets/style.css` 전면 수정. (처음엔 Pretendard 폰트를 외부 CDN `@import`로 불러왔었는데, 카카오톡 인앱 브라우저에서 그 요청이 막히면서 CSS 전체가 안 먹는 문제가 있어서 **외부 리소스 의존성 없이 시스템 폰트만 쓰도록 되돌림** — 외부 CDN @import/폰트는 다시 넣지 말 것.)
+- (2026-07-30) **GitHub Pages로 배포 완료**: https://greenday0320.github.io/moe-wiki/ — 정식 HTTPS 주소라 카톡 포함 어디서든 정상 작동. GitHub 저장소: https://github.com/Greenday0320/moe-wiki (계정 Greenday0320, `gh` CLI 인증 완료된 상태). 로컬 LAN 서버(`python -m http.server`)와 Cloudflare 임시 터널(`cloudflared`)은 배포 전 모바일 테스트용으로 잠깐 썼던 것이고 지금은 정리(kill)해서 안 떠 있음 — 이제 필요 없음, 로컬 미리보기가 필요하면 다시 `python -m http.server 8000` 실행하면 됨.
+
+### 사이트 업데이트(재배포) 방법
+로컬에서 `data/*.md`·`category_map.json`·`generate_wiki.py` 등을 고치고 페이지를 다시 만든 뒤:
+```
+cd "C:\Users\82103\Desktop\교육부위키"
+git add -A
+git commit -m "설명"
+git push
+```
+푸시하면 GitHub Pages가 자동으로 다시 빌드한다(보통 30초~1분). `gh`는 이미 `Greenday0320` 계정으로 인증되어 있어서 별도 로그인 불필요.
 
 ## 새 채팅방에서 할 말 (예시)
 > "C:\Users\82103\Desktop\교육부위키 프로젝트 이어서 작업할 거야. CONTINUE.md 읽고 최근 N일치 보도자료 추가로 처리해줘."
