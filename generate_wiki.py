@@ -26,7 +26,7 @@ CATEGORIES_DIR = ROOT / "categories"
 TOPICS_DIR = ROOT / "topics"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
-CSS_VERSION = 4  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 5  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -453,6 +453,17 @@ INDEX_TEMPLATE = """<!doctype html>
     <h1 class="site-title">교육부 위키</h1>
     <p class="site-subtitle">교육부 보도자료를 위키 형태로 정리한 아카이브</p>
   </header>
+
+  <div class="site-notice">
+    <p><strong>📌 안내</strong></p>
+    <p>이 위키는 교육부 보도자료를 바탕으로 <strong>격주</strong>로 업데이트됩니다.</p>
+    <p>
+      · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
+      · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
+      · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 시간순으로 볼 수 있습니다.
+    </p>
+    <p class="site-notice-signature">(제작 by NSG)</p>
+  </div>
 
   <h2 class="section-label">정책 위키</h2>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
