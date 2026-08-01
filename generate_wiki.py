@@ -16,6 +16,7 @@ import json
 import re
 import sys
 import html
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -28,7 +29,7 @@ ORG_DIR = ROOT / "org"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
-CSS_VERSION = 6  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 7  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -631,6 +632,7 @@ INDEX_TEMPLATE = """<!doctype html>
   <div class="site-notice">
     <p><strong>📌 안내</strong></p>
     <p>이 위키는 교육부 보도자료를 바탕으로 <strong>격주</strong>로 업데이트됩니다. 업데이트되면 이 페이지에 <strong>자동으로 최신 내용이 반영</strong>되므로, 새 링크를 받을 필요 없이 지금 이 주소를 그대로 저장해두고 보시면 됩니다.</p>
+    <p class="site-notice-updated">최근 업데이트: {updated_date}</p>
     <p>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
@@ -785,6 +787,7 @@ def rebuild_index():
     (ROOT / "index.html").write_text(
         INDEX_TEMPLATE.format(
             css_ver=CSS_VERSION,
+            updated_date=date.today().isoformat(),
             topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
             category_cards="\n".join(cards),
             rows="\n".join(rows),

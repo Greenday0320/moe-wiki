@@ -68,6 +68,7 @@ a { -webkit-tap-highlight-color: rgba(54,82,217,.2); }
 }
 .site-notice p { margin: 6px 0; }
 .site-notice-signature { text-align: right; color: var(--muted); font-size: 12.5px; margin-top: 10px !important; }
+.site-notice-updated { color: var(--muted); font-size: 12.5px; }
 
 .org-link-card {
   display: block;
