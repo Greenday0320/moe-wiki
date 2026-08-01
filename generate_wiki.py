@@ -549,6 +549,70 @@ def render_org():
     )
 
 
+WORKPLAN_PAGE_TEMPLATE = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} - 교육부 위키</title>
+<link rel="stylesheet" href="assets/style.css?v={css_ver}">
+</head>
+<body>
+<div class="wiki-page">
+  <div class="wiki-breadcrumb"><a href="index.html">교육부 위키</a> &gt; 업무계획</div>
+  <h1 class="wiki-title">{title}</h1>
+  <div class="wiki-subtitle">{subtitle}</div>
+
+  <div class="toc">
+    <div class="toc-title">목차</div>
+    <ol>
+{toc_items}
+    </ol>
+  </div>
+
+{body}
+
+  <p><a href="{source_url}" target="_blank" rel="noopener">교육부 원문 페이지 ↗</a></p>
+
+  <div class="wiki-footer">
+    <a href="index.html">&larr; 목록으로</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+def render_workplan(workplan_id: str):
+    """data/workplan-<id>.json(카드뉴스 등 공식 발표 자료를 바탕으로 재구성한 연간 업무계획 요약)을
+    읽어 workplan-<id>.html 을 생성한다. 정책 위키(topics/)와 달리 index.html에서 별도 섹션으로 노출된다."""
+    plan = json.loads((DATA_DIR / f"workplan-{workplan_id}.json").read_text(encoding="utf-8"))
+
+    toc_items = []
+    body_parts = []
+    for i, sec in enumerate(plan["sections"], 1):
+        anchor = f"sec{i}"
+        toc_items.append(f'      <li><a href="#{anchor}">{esc(sec["heading"])}</a></li>')
+        section_html = f'  <h2 id="{anchor}">{esc(sec["heading"])}</h2>\n{render_prose(sec["body"])}'
+        related = sec.get("related_topics") or []
+        if related:
+            links = " · ".join(f'<a href="topics/{t["id"]}.html">{esc(t["label"])}</a>' for t in related)
+            section_html += f'\n  <p class="related-topics-line"><strong>관련 정책 위키:</strong> {links}</p>'
+        body_parts.append(section_html)
+
+    html_out = WORKPLAN_PAGE_TEMPLATE.format(
+        css_ver=CSS_VERSION,
+        title=esc(plan["title"]),
+        subtitle=esc(plan.get("subtitle", "")),
+        toc_items="\n".join(toc_items),
+        body="\n\n".join(body_parts),
+        source_url=esc(plan["source_url"]),
+    )
+    out_path = ROOT / f"workplan-{workplan_id}.html"
+    out_path.write_text(html_out, encoding="utf-8")
+    return plan, out_path
+
+
 INDEX_TEMPLATE = """<!doctype html>
 <html lang="ko">
 <head>
@@ -576,6 +640,10 @@ INDEX_TEMPLATE = """<!doctype html>
   </div>
 
   <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
+
+  <h2 class="section-label">2026년 업무계획</h2>
+  <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 3대 방향과 핵심 과제를 한 페이지로 정리했습니다.</p>
+  <a class="org-link-card" href="workplan-2026.html">📋 2026년 교육부 업무계획 보기 &rarr;</a>
 
   <h2 class="section-label">정책 위키</h2>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
@@ -758,10 +826,11 @@ if __name__ == "__main__":
     if sys.argv[1] == "--rebuild-index":
         for t in _collect_topics():
             render_topic(t["id"])
+        render_workplan("2026")
         rebuild_categories()
         rebuild_index()
         render_org()
-        print("index.html / categories/*.html / topics/*.html / org.html 갱신 완료")
+        print("index.html / categories/*.html / topics/*.html / org.html / workplan-2026.html 갱신 완료")
     elif sys.argv[1] == "--ingest":
         ingest(sys.argv[2])
     elif sys.argv[1] == "--topic":
