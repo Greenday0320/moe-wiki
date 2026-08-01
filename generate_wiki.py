@@ -23,8 +23,10 @@ DATA_DIR = ROOT / "data"
 ARTICLES_DIR = ROOT / "articles"
 ASSETS_DIR = ROOT / "assets"
 CATEGORIES_DIR = ROOT / "categories"
+TOPICS_DIR = ROOT / "topics"
+DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
-CSS_VERSION = 3  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 4  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -348,6 +350,91 @@ def render_article(slug: str):
     return meta, out_path
 
 
+TOPIC_PAGE_TEMPLATE = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} - 교육부 위키</title>
+<link rel="stylesheet" href="../assets/style.css?v={css_ver}">
+</head>
+<body>
+<div class="wiki-page">
+  <div class="wiki-breadcrumb"><a href="../index.html">교육부 위키</a> &gt; 정책 위키</div>
+  <h1 class="wiki-title">{title}</h1>
+  <div class="wiki-subtitle">{subtitle}</div>
+  <div class="topic-meta">다루는 기간 {period} · 관련 보도자료 {count}건</div>
+
+  <div class="toc">
+    <div class="toc-title">목차</div>
+    <ol>
+{toc_items}
+    </ol>
+  </div>
+
+{body}
+
+  <h2 id="related">관련 보도자료</h2>
+  <div class="doc-card-list">
+{related_rows}
+  </div>
+
+  <div class="wiki-footer">
+    <a href="../index.html">&larr; 목록으로</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+def render_topic(topic_id: str):
+    """data/topics/<topic_id>.json(수기로 종합 작성한 주제별 정책 문서)을 읽어
+    topics/<topic_id>.html 을 생성한다. 개별 보도자료 문서(render_article)와 달리
+    kordoc 청크가 아니라, 여러 보도자료를 종합해 사람이(Claude가) 직접 쓴 섹션들을 렌더링한다."""
+    topic = json.loads((DATA_TOPICS_DIR / f"{topic_id}.json").read_text(encoding="utf-8"))
+
+    toc_items = []
+    body_parts = []
+    for i, sec in enumerate(topic["sections"], 1):
+        anchor = f"sec{i}"
+        toc_items.append(f'      <li><a href="#{anchor}">{esc(sec["heading"])}</a></li>')
+        body_parts.append(f'  <h2 id="{anchor}">{i}. {esc(sec["heading"])}</h2>\n{render_prose(sec["body"])}')
+    toc_items.append('      <li><a href="#related">관련 보도자료</a></li>')
+
+    related_rows = []
+    for seq in topic["related"]:
+        meta = json.loads((DATA_DIR / f"{seq}.meta.json").read_text(encoding="utf-8"))
+        related_rows.append(
+            f'    <a class="doc-card" href="../articles/{seq}.html">'
+            f'<span class="doc-date">{esc(meta.get("date", ""))}</span>'
+            f'<span class="doc-title">{esc(meta["title"])}</span></a>'
+        )
+
+    html_out = TOPIC_PAGE_TEMPLATE.format(
+        css_ver=CSS_VERSION,
+        title=esc(topic["title"]),
+        subtitle=esc(topic.get("subtitle", "")),
+        period=esc(topic.get("period", "")),
+        count=len(topic["related"]),
+        toc_items="\n".join(toc_items),
+        body="\n\n".join(body_parts),
+        related_rows="\n".join(related_rows),
+    )
+    TOPICS_DIR.mkdir(exist_ok=True)
+    out_path = TOPICS_DIR / f"{topic_id}.html"
+    out_path.write_text(html_out, encoding="utf-8")
+    return topic, out_path
+
+
+def _collect_topics():
+    if not DATA_TOPICS_DIR.exists():
+        return []
+    topics = [json.loads(f.read_text(encoding="utf-8")) for f in sorted(DATA_TOPICS_DIR.glob("*.json"))]
+    topics.sort(key=lambda t: t.get("period", ""), reverse=True)
+    return topics
+
+
 INDEX_TEMPLATE = """<!doctype html>
 <html lang="ko">
 <head>
@@ -362,6 +449,12 @@ INDEX_TEMPLATE = """<!doctype html>
     <h1 class="site-title">교육부 위키</h1>
     <p class="site-subtitle">교육부 보도자료를 위키 형태로 정리한 아카이브</p>
   </header>
+
+  <h2 class="section-label">정책 위키</h2>
+  <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
+  <div class="topic-grid">
+{topic_cards}
+  </div>
 
   <h2 class="section-label">분류</h2>
   <div class="category-grid">
@@ -468,6 +561,15 @@ def rebuild_categories():
 
 def rebuild_index():
     metas = _collect_metas()
+    topics = _collect_topics()
+
+    topic_cards = [
+        f'    <a class="topic-card" href="topics/{t["id"]}.html">'
+        f'<div class="topic-card-title">{esc(t["title"])}</div>'
+        f'<div class="topic-card-subtitle">{esc(t.get("subtitle", ""))}</div>'
+        f'<span class="topic-card-count">관련 보도자료 {len(t["related"])}건</span></a>'
+        for t in topics
+    ]
 
     cards = []
     for cat in CATEGORY_MAP["categories"]:
@@ -486,7 +588,12 @@ def rebuild_index():
         rows.append(_doc_card(m, "", cat_label))
 
     (ROOT / "index.html").write_text(
-        INDEX_TEMPLATE.format(css_ver=CSS_VERSION, category_cards="\n".join(cards), rows="\n".join(rows)),
+        INDEX_TEMPLATE.format(
+            css_ver=CSS_VERSION,
+            topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
+            category_cards="\n".join(cards),
+            rows="\n".join(rows),
+        ),
         encoding="utf-8",
     )
 
@@ -522,11 +629,17 @@ if __name__ == "__main__":
         print(__doc__)
         sys.exit(1)
     if sys.argv[1] == "--rebuild-index":
+        for t in _collect_topics():
+            render_topic(t["id"])
         rebuild_categories()
         rebuild_index()
-        print("index.html / categories/*.html 갱신 완료")
+        print("index.html / categories/*.html / topics/*.html 갱신 완료")
     elif sys.argv[1] == "--ingest":
         ingest(sys.argv[2])
+    elif sys.argv[1] == "--topic":
+        topic, path = render_topic(sys.argv[2])
+        rebuild_index()
+        print(f"생성됨: {path}")
     else:
         slug = sys.argv[1]
         meta, path = render_article(slug)
