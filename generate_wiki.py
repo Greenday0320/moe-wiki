@@ -26,7 +26,8 @@ CATEGORIES_DIR = ROOT / "categories"
 TOPICS_DIR = ROOT / "topics"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
-CSS_VERSION = 5  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
+CSS_VERSION = 6  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -439,6 +440,78 @@ def _collect_topics():
     return topics
 
 
+ORG_PAGE_TEMPLATE = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>조직도 - 교육부 위키</title>
+<link rel="stylesheet" href="assets/style.css?v={css_ver}">
+</head>
+<body>
+<div class="wiki-page">
+  <div class="wiki-breadcrumb"><a href="index.html">교육부 위키</a> &gt; 조직도</div>
+  <h1 class="wiki-title">교육부 조직도</h1>
+  <div class="wiki-subtitle">교육부의 실제 조직 체계를 한눈에 보고, 부서별 보도자료 건수를 확인할 수 있습니다.</div>
+  <p class="section-desc">숫자가 있는 과·팀을 클릭하면 그 부서가 속한 분류 페이지로 이동합니다.</p>
+
+  <div class="org-tree">
+{tree}
+  </div>
+
+  <div class="wiki-footer">
+    <a href="index.html">&larr; 목록으로</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+def _org_count(node, metas) -> int:
+    children = node.get("children")
+    if not children:
+        return sum(1 for m in metas if m.get("division") == node["name"])
+    return sum(_org_count(c, metas) for c in children)
+
+
+def _org_href(division_name: str):
+    main, _sub = classify("", division_name)
+    if main == "미분류":
+        return None
+    cat = next((c for c in CATEGORY_MAP["categories"] if c["name"] == main), None)
+    return f"categories/{cat['id']}.html" if cat else None
+
+
+def _render_org_node(node, metas, depth: int) -> str:
+    count = _org_count(node, metas)
+    children = node.get("children")
+    name_html = esc(node["name"])
+    count_html = f'<span class="org-count">{count}건</span>' if count else ""
+    if children:
+        inner = "\n".join(_render_org_node(c, metas, depth + 1) for c in children)
+        return (
+            f'<div class="org-node org-level{depth}">'
+            f'<div class="org-row"><span class="org-name">{name_html}</span>{count_html}</div>'
+            f'<div class="org-children">{inner}</div>'
+            f'</div>'
+        )
+    href = _org_href(node["name"]) if count else None
+    if href:
+        row = f'<a class="org-row org-leaf-link" href="{href}"><span class="org-name">{name_html}</span>{count_html}</a>'
+    else:
+        row = f'<div class="org-row org-leaf"><span class="org-name">{name_html}</span>{count_html}</div>'
+    return f'<div class="org-node org-level{depth}">{row}</div>'
+
+
+def render_org():
+    metas = _collect_metas()
+    tree_html = "\n".join(_render_org_node(node, metas, 1) for node in ORG_CHART)
+    (ROOT / "org.html").write_text(
+        ORG_PAGE_TEMPLATE.format(css_ver=CSS_VERSION, tree=tree_html), encoding="utf-8"
+    )
+
+
 INDEX_TEMPLATE = """<!doctype html>
 <html lang="ko">
 <head>
@@ -464,6 +537,8 @@ INDEX_TEMPLATE = """<!doctype html>
     </p>
     <p class="site-notice-signature">(제작 by NSG)</p>
   </div>
+
+  <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
 
   <h2 class="section-label">정책 위키</h2>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
@@ -648,7 +723,8 @@ if __name__ == "__main__":
             render_topic(t["id"])
         rebuild_categories()
         rebuild_index()
-        print("index.html / categories/*.html / topics/*.html 갱신 완료")
+        render_org()
+        print("index.html / categories/*.html / topics/*.html / org.html 갱신 완료")
     elif sys.argv[1] == "--ingest":
         ingest(sys.argv[2])
     elif sys.argv[1] == "--topic":
