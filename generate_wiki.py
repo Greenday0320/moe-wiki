@@ -24,6 +24,7 @@ ARTICLES_DIR = ROOT / "articles"
 ASSETS_DIR = ROOT / "assets"
 CATEGORIES_DIR = ROOT / "categories"
 TOPICS_DIR = ROOT / "topics"
+ORG_DIR = ROOT / "org"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
@@ -453,7 +454,7 @@ ORG_PAGE_TEMPLATE = """<!doctype html>
   <div class="wiki-breadcrumb"><a href="index.html">교육부 위키</a> &gt; 조직도</div>
   <h1 class="wiki-title">교육부 조직도</h1>
   <div class="wiki-subtitle">교육부의 실제 조직 체계를 한눈에 보고, 부서별 보도자료 건수를 확인할 수 있습니다.</div>
-  <p class="section-desc">숫자가 있는 과·팀을 클릭하면 그 부서가 속한 분류 페이지로 이동합니다.</p>
+  <p class="section-desc">숫자가 있는 과·팀을 클릭하면 그 부서 명의로 발표된 보도자료만 모아서 볼 수 있습니다.</p>
 
   <div class="org-tree">
 {tree}
@@ -468,6 +469,33 @@ ORG_PAGE_TEMPLATE = """<!doctype html>
 """
 
 
+ORG_NODE_PAGE_TEMPLATE = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{name} - 교육부 위키</title>
+<link rel="stylesheet" href="../assets/style.css?v={css_ver}">
+</head>
+<body>
+<div class="wiki-page">
+  <div class="wiki-breadcrumb"><a href="../index.html">교육부 위키</a> &gt; <a href="../org.html">조직도</a></div>
+  <h1 class="wiki-title">{path}</h1>
+  <div class="wiki-subtitle">이 부서 명의로 발표된 보도자료입니다.</div>
+
+  <div class="doc-card-list">
+{rows}
+  </div>
+
+  <div class="wiki-footer">
+    <a href="../org.html">&larr; 조직도로</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
 def _org_count(node, metas) -> int:
     children = node.get("children")
     if not children:
@@ -475,38 +503,47 @@ def _org_count(node, metas) -> int:
     return sum(_org_count(c, metas) for c in children)
 
 
-def _org_href(division_name: str):
-    main, _sub = classify("", division_name)
-    if main == "미분류":
-        return None
-    cat = next((c for c in CATEGORY_MAP["categories"] if c["name"] == main), None)
-    return f"categories/{cat['id']}.html" if cat else None
-
-
-def _render_org_node(node, metas, depth: int) -> str:
+def _render_org_node(node, metas, depth: int, path: list) -> str:
     count = _org_count(node, metas)
     children = node.get("children")
     name_html = esc(node["name"])
     count_html = f'<span class="org-count">{count}건</span>' if count else ""
     if children:
-        inner = "\n".join(_render_org_node(c, metas, depth + 1) for c in children)
+        my_path = path + [node["name"]]
+        inner = "\n".join(_render_org_node(c, metas, depth + 1, my_path) for c in children)
         return (
             f'<div class="org-node org-level{depth}">'
             f'<div class="org-row"><span class="org-name">{name_html}</span>{count_html}</div>'
             f'<div class="org-children">{inner}</div>'
             f'</div>'
         )
-    href = _org_href(node["name"]) if count else None
-    if href:
-        row = f'<a class="org-row org-leaf-link" href="{href}"><span class="org-name">{name_html}</span>{count_html}</a>'
+    if count:
+        _write_org_node_page(node["name"], path, metas)
+        row = f'<a class="org-row org-leaf-link" href="org/{node["name"]}.html"><span class="org-name">{name_html}</span>{count_html}</a>'
     else:
         row = f'<div class="org-row org-leaf"><span class="org-name">{name_html}</span>{count_html}</div>'
     return f'<div class="org-node org-level{depth}">{row}</div>'
 
 
+def _write_org_node_page(division_name: str, path: list, metas: list):
+    """조직도에서 특정 과/팀(leaf)을 눌렀을 때, 그 부서명(division)이 정확히 일치하는
+    보도자료만 모아 org/<부서명>.html 을 생성한다. (분류 페이지는 대분류 단위라 여러
+    부서 문서가 섞여 나오므로, 조직도에서는 부서 단위로 별도 페이지를 둔다.)"""
+    members = [m for m in metas if m.get("division") == division_name]
+    rows = "\n".join(_doc_card(m, "../", "") for m in members)
+    full_path = " &gt; ".join(esc(p) for p in path + [division_name])
+    ORG_DIR.mkdir(exist_ok=True)
+    (ORG_DIR / f"{division_name}.html").write_text(
+        ORG_NODE_PAGE_TEMPLATE.format(
+            css_ver=CSS_VERSION, name=esc(division_name), path=full_path, rows=rows
+        ),
+        encoding="utf-8",
+    )
+
+
 def render_org():
     metas = _collect_metas()
-    tree_html = "\n".join(_render_org_node(node, metas, 1) for node in ORG_CHART)
+    tree_html = "\n".join(_render_org_node(node, metas, 1, []) for node in ORG_CHART)
     (ROOT / "org.html").write_text(
         ORG_PAGE_TEMPLATE.format(css_ver=CSS_VERSION, tree=tree_html), encoding="utf-8"
     )
