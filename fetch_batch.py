@@ -12,6 +12,7 @@ import argparse
 import datetime
 import json
 import re
+import time
 import urllib.request
 from pathlib import Path
 
@@ -34,10 +35,24 @@ ATTACH_NAME_RE = re.compile(r"<span>([^<]*\.(hwpx|hwp|pdf|docx))")
 ATTACH_HREF_RE = re.compile(r"(/boardCnts/fileDown\.do\?[^\"]+)")
 
 
+def _retry(fn, tries=4, delay=3):
+    """사이트 응답이 느려서 타임아웃이 잦아, 실패 시 잠깐 쉬었다가 재시도한다."""
+    for i in range(tries):
+        try:
+            return fn()
+        except (TimeoutError, OSError) as e:
+            if i == tries - 1:
+                raise
+            print(f"  (네트워크 오류, {delay}초 후 재시도 {i+1}/{tries}: {e})")
+            time.sleep(delay)
+
+
 def fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    def _do():
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    return _retry(_do)
 
 
 def list_rows(page: int):
@@ -86,10 +101,10 @@ def main():
             ext, href = attach
             raw_path = RAW_DIR / f"{seq}.{ext}"
             if not raw_path.exists():
-                data = urllib.request.urlopen(
+                data = _retry(lambda: urllib.request.urlopen(
                     urllib.request.Request(FILE_URL.format(href=href), headers=HEADERS),
                     timeout=30,
-                ).read()
+                ).read())
                 raw_path.write_bytes(data)
             manifest.append({
                 "boardSeq": seq,
@@ -99,10 +114,11 @@ def main():
                 "raw_path": str(raw_path),
             })
         page += 1
+        # 페이지마다 중간 저장 — 도중에 네트워크 오류로 죽어도 그때까지의 진행 상황은 남는다.
+        (DATA_DIR / "_batch_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
-    (DATA_DIR / "_batch_manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
     print(f"\n총 {len(manifest)}건 다운로드 완료 -> data/_batch_manifest.json")
 
 
