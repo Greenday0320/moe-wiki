@@ -29,7 +29,7 @@ ORG_DIR = ROOT / "org"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
-CSS_VERSION = 7  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 8  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -755,7 +755,8 @@ def _month_label(ym: str) -> str:
 
 
 def _doc_month_sections(metas: list[dict]) -> str:
-    """metas(날짜 내림차순)를 월(YYYY-MM) 단위로 묶어 subcat-section 목록 HTML을 만든다."""
+    """metas(날짜 내림차순)를 월(YYYY-MM) 단위로 묶어, <details>로 접었다 펼 수 있는 목록 HTML을 만든다.
+    전부 기본으로 접어서 스크롤 부담을 줄인다(JS 없이 네이티브 요소로 구현)."""
     groups: list[tuple[str, list[dict]]] = []
     for m in metas:
         ym = m.get("date", "")[:7]
@@ -771,10 +772,10 @@ def _doc_month_sections(metas: list[dict]) -> str:
             cat_label = m["_main_cat"] + (f" &gt; {esc(m['_sub_cat'])}" if m["_sub_cat"] else "")
             cards.append(_doc_card(m, "", cat_label))
         sections.append(
-            f'  <div class="subcat-section">\n'
-            f'    <h2 class="section-label">{esc(_month_label(ym))} <span class="chip">{len(members)}건</span></h2>\n'
+            f'  <details class="subcat-section">\n'
+            f'    <summary class="section-label month-summary">{esc(_month_label(ym))} <span class="chip">{len(members)}건</span></summary>\n'
             f'    <div class="doc-card-list">\n' + "\n".join(cards) + "\n    </div>\n"
-            f"  </div>"
+            f"  </details>"
         )
     return "\n".join(sections)
 

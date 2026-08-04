@@ -243,6 +243,20 @@ a.org-row.org-leaf-link .org-count { background: transparent; padding: 0; }
 .doc-tag { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
 .doc-empty { padding: 24px 18px; color: var(--muted); font-size: 14px; }
 
+.month-summary {
+  cursor: pointer;
+  list-style: none;
+}
+.month-summary::-webkit-details-marker { display: none; }
+.month-summary::marker { content: ""; }
+.month-summary::after {
+  content: "▸";
+  float: right;
+  color: var(--accent);
+  transition: transform .15s ease;
+}
+details[open] > .month-summary::after { transform: rotate(90deg); }
+
 /* ---------- 문서(article) 페이지 ---------- */
 .wiki-breadcrumb {
   font-size: 13px;
