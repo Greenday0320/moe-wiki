@@ -30,6 +30,7 @@ DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
 CSS_VERSION = 8  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+SUGGESTION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScnEvpD9gdbr80YJziQmLPxqcAkw6V1sgxrQpQk9LidgnqYKw/viewform"
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -664,6 +665,7 @@ INDEX_TEMPLATE = """<!doctype html>
     <p class="site-notice-updated">최근 업데이트: {updated_date}</p>
     <p>
       · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
+      · <strong>익명 제안함</strong> — 이 위키에 대한 의견·건의사항을 로그인 없이 익명으로 남길 수 있습니다.<br>
       · <strong>교육부 업무계획</strong> — 교육부가 올해 발표한 연간 업무계획(3대 방향·핵심 과제)을 한 페이지로 정리했습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
@@ -673,6 +675,8 @@ INDEX_TEMPLATE = """<!doctype html>
   </div>
 
   <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
+
+  <a class="org-link-card" href="{suggestion_form_url}" target="_blank" rel="noopener">💬 위키에 익명으로 제안하기 &rarr;</a>
 
   <h2 class="section-label">2026년 업무계획</h2>
   <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 3대 방향과 핵심 과제를 한 페이지로 정리했습니다.</p>
@@ -845,6 +849,7 @@ def rebuild_index():
         INDEX_TEMPLATE.format(
             css_ver=CSS_VERSION,
             updated_date=date.today().isoformat(),
+            suggestion_form_url=SUGGESTION_FORM_URL,
             topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
             category_cards="\n".join(cards),
             rows=rows,
