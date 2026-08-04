@@ -663,9 +663,11 @@ INDEX_TEMPLATE = """<!doctype html>
     <p>이 위키는 교육부 보도자료를 바탕으로 <strong>격주</strong>로 업데이트됩니다. 업데이트되면 이 페이지에 <strong>자동으로 최신 내용이 반영</strong>되므로, 새 링크를 받을 필요 없이 지금 이 주소를 그대로 저장해두고 보시면 됩니다.</p>
     <p class="site-notice-updated">최근 업데이트: {updated_date}</p>
     <p>
+      · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
+      · <strong>교육부 업무계획</strong> — 교육부가 올해 발표한 연간 업무계획(3대 방향·핵심 과제)을 한 페이지로 정리했습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
-      · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 시간순으로 볼 수 있습니다.
+      · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 월별로 나눠서 볼 수 있습니다.
     </p>
     <p class="site-notice-signature">(제작 by NSG)</p>
   </div>
@@ -688,9 +690,7 @@ INDEX_TEMPLATE = """<!doctype html>
   </div>
 
   <h2 class="section-label">최신 문서</h2>
-  <div class="doc-card-list">
 {rows}
-  </div>
 </div>
 </body>
 </html>
@@ -747,6 +747,36 @@ def _subcat_section(label: str, members: list[dict]) -> str:
         f'    <div class="doc-card-list">\n' + "\n".join(rows) + "\n    </div>\n"
         f"  </div>"
     )
+
+
+def _month_label(ym: str) -> str:
+    year, month = ym.split("-")
+    return f"{year}년 {int(month)}월"
+
+
+def _doc_month_sections(metas: list[dict]) -> str:
+    """metas(날짜 내림차순)를 월(YYYY-MM) 단위로 묶어 subcat-section 목록 HTML을 만든다."""
+    groups: list[tuple[str, list[dict]]] = []
+    for m in metas:
+        ym = m.get("date", "")[:7]
+        if groups and groups[-1][0] == ym:
+            groups[-1][1].append(m)
+        else:
+            groups.append((ym, [m]))
+
+    sections = []
+    for ym, members in groups:
+        cards = []
+        for m in members:
+            cat_label = m["_main_cat"] + (f" &gt; {esc(m['_sub_cat'])}" if m["_sub_cat"] else "")
+            cards.append(_doc_card(m, "", cat_label))
+        sections.append(
+            f'  <div class="subcat-section">\n'
+            f'    <h2 class="section-label">{esc(_month_label(ym))} <span class="chip">{len(members)}건</span></h2>\n'
+            f'    <div class="doc-card-list">\n' + "\n".join(cards) + "\n    </div>\n"
+            f"  </div>"
+        )
+    return "\n".join(sections)
 
 
 def rebuild_categories():
@@ -808,10 +838,7 @@ def rebuild_index():
             f'<div class="category-subcats">{chips}</div></a>'
         )
 
-    rows = []
-    for m in metas:
-        cat_label = m["_main_cat"] + (f" &gt; {esc(m['_sub_cat'])}" if m["_sub_cat"] else "")
-        rows.append(_doc_card(m, "", cat_label))
+    rows = _doc_month_sections(metas)
 
     (ROOT / "index.html").write_text(
         INDEX_TEMPLATE.format(
@@ -819,7 +846,7 @@ def rebuild_index():
             updated_date=date.today().isoformat(),
             topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
             category_cards="\n".join(cards),
-            rows="\n".join(rows),
+            rows=rows,
         ),
         encoding="utf-8",
     )
