@@ -83,7 +83,7 @@ def main():
     manifest = []
     page = 1
     stop = False
-    while not stop and page <= 30:
+    while not stop and page <= 45:
         rows = list_rows(page)
         if not rows:
             break
