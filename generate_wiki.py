@@ -664,8 +664,8 @@ INDEX_TEMPLATE = """<!doctype html>
     <p>이 위키는 교육부 보도자료를 바탕으로 <strong>격주</strong>로 업데이트됩니다. 업데이트되면 이 페이지에 <strong>자동으로 최신 내용이 반영</strong>되므로, 새 링크를 받을 필요 없이 지금 이 주소를 그대로 저장해두고 보시면 됩니다.</p>
     <p class="site-notice-updated">최근 업데이트: {updated_date}</p>
     <p>
-      · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
       · <strong>익명 제안함</strong> — 이 위키에 대한 의견·건의사항을 로그인 없이 익명으로 남길 수 있습니다.<br>
+      · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
       · <strong>교육부 업무계획</strong> — 교육부가 올해 발표한 연간 업무계획(3대 방향·핵심 과제)을 한 페이지로 정리했습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
@@ -674,9 +674,9 @@ INDEX_TEMPLATE = """<!doctype html>
     <p class="site-notice-signature">(제작 by NSG)</p>
   </div>
 
-  <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
-
   <a class="org-link-card" href="{suggestion_form_url}" target="_blank" rel="noopener">💬 위키에 익명으로 제안하기 &rarr;</a>
+
+  <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
 
   <h2 class="section-label">2026년 업무계획</h2>
   <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 3대 방향과 핵심 과제를 한 페이지로 정리했습니다.</p>
