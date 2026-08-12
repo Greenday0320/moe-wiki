@@ -31,6 +31,8 @@ CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
 CSS_VERSION = 8  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 SUGGESTION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScnEvpD9gdbr80YJziQmLPxqcAkw6V1sgxrQpQk9LidgnqYKw/viewform"
+# 업무계획 문서 id 목록(연간/반기별). data/workplan-<id>.json 하나당 workplan-<id>.html 하나 생성.
+WORKPLAN_IDS = ["2026", "2026-h2"]
 
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 ATTACH_RE = re.compile(r"붙임\s*(\d+)")
@@ -69,17 +71,20 @@ KEYWORD_LINKS = [
     {"phrase": "첨단산업 인재양성 부트캠프", "targets": {
         "105764": "106424", "105939": "106424", "106021": "106424",
         "106147": "106424", "106235": "106424", "106666": "106424",
+        "106846": "106424", "106878": "106424",
     }},
     {"phrase": "청년도약 인재양성 부트캠프", "targets": {
-        "105856": "106478", "106021": "106478", "106424": "106478",
+        "105856": "106478", "106021": "106478", "106424": "106478", "106846": "106478",
     }},
     {"phrase": "한국교육원", "targets": {
         "106806": "106749", "106749": "106806", "106603": "106806", "105666": "106603",
+        "106879": "106806", "106888": "106806",
     }},
     {"phrase": "데이터로 읽는 우리 교육", "targets": {
         "106680": "106773", "106436": "106571", "106571": "106680",
         "106054": "106180", "106180": "106324", "106324": "106436",
         "105614": "105736", "105736": "105924", "105924": "106054",
+        "106773": "106880",
     }},
 ]
 
@@ -666,7 +671,7 @@ INDEX_TEMPLATE = """<!doctype html>
     <p>
       · <strong>익명 제안함</strong> — 이 위키에 대한 의견·건의사항을 로그인 없이 익명으로 남길 수 있습니다.<br>
       · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
-      · <strong>교육부 업무계획</strong> — 교육부가 올해 발표한 연간 업무계획(3대 방향·핵심 과제)을 한 페이지로 정리했습니다.<br>
+      · <strong>교육부 업무계획</strong> — 교육부가 발표한 연간·반기별 업무계획(방향·핵심 과제)을 한 페이지씩 정리했습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
       · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 월별로 나눠서 볼 수 있습니다.
@@ -680,9 +685,9 @@ INDEX_TEMPLATE = """<!doctype html>
   <p class="section-desc">실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.</p>
   <a class="org-link-card" href="org.html">🏛️ 교육부 조직도 한눈에 보기 &rarr;</a>
 
-  <h2 class="section-label">2026년 업무계획</h2>
-  <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 3대 방향과 핵심 과제를 한 페이지로 정리했습니다.</p>
-  <a class="org-link-card" href="workplan-2026.html">📋 2026년 교육부 업무계획 보기 &rarr;</a>
+  <h2 class="section-label">교육부 업무계획</h2>
+  <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 연간·반기별 업무계획의 방향과 핵심 과제를 한 페이지씩 정리했습니다.</p>
+{workplan_cards}
 
   <h2 class="section-label">정책 위키</h2>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
@@ -826,6 +831,13 @@ def rebuild_index():
     metas = _collect_metas()
     topics = _collect_topics()
 
+    workplan_cards = []
+    for wid in WORKPLAN_IDS:
+        plan = json.loads((DATA_DIR / f"workplan-{wid}.json").read_text(encoding="utf-8"))
+        workplan_cards.append(
+            f'  <a class="org-link-card" href="workplan-{wid}.html">📋 {esc(plan["title"])} 보기 &rarr;</a>'
+        )
+
     topic_cards = [
         f'    <a class="topic-card" href="topics/{t["id"]}.html">'
         f'<div class="topic-card-title">{esc(t["title"])}</div>'
@@ -852,6 +864,7 @@ def rebuild_index():
             css_ver=CSS_VERSION,
             updated_date=date.today().isoformat(),
             suggestion_form_url=SUGGESTION_FORM_URL,
+            workplan_cards="\n".join(workplan_cards),
             topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
             category_cards="\n".join(cards),
             rows=rows,
@@ -893,7 +906,8 @@ if __name__ == "__main__":
     if sys.argv[1] == "--rebuild-index":
         for t in _collect_topics():
             render_topic(t["id"])
-        render_workplan("2026")
+        for wid in WORKPLAN_IDS:
+            render_workplan(wid)
         rebuild_categories()
         rebuild_index()
         render_org()
