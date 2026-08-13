@@ -26,7 +26,9 @@ ASSETS_DIR = ROOT / "assets"
 CATEGORIES_DIR = ROOT / "categories"
 TOPICS_DIR = ROOT / "topics"
 ORG_DIR = ROOT / "org"
+COLLABS_DIR = ROOT / "collabs"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
+DATA_COLLABS_DIR = DATA_DIR / "collabs"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
 CSS_VERSION = 8  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
@@ -477,6 +479,92 @@ def _collect_topics():
     return topics
 
 
+COLLAB_PAGE_TEMPLATE = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} - 교육부 위키</title>
+<link rel="stylesheet" href="../assets/style.css?v={css_ver}">
+</head>
+<body>
+<div class="wiki-page">
+  <div class="wiki-breadcrumb"><a href="../index.html">교육부 위키</a> &gt; 타부처 협업</div>
+  <h1 class="wiki-title">{title}</h1>
+  <div class="wiki-subtitle">{subtitle}</div>
+  <div class="topic-meta">다루는 기간 {period} · 관련 보도자료 {count}건</div>
+
+  <div class="toc">
+    <div class="toc-title">목차</div>
+    <ol>
+{toc_items}
+    </ol>
+  </div>
+
+{body}
+
+  <h2 id="related">관련 보도자료</h2>
+  <div class="doc-card-list">
+{related_rows}
+  </div>
+
+  <div class="wiki-footer">
+    <a href="../index.html">&larr; 목록으로</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+def render_collab(collab_id: str):
+    """data/collabs/<collab_id>.json(교육부가 다른 부처와 함께 진행한 협업 사업을 종합
+    정리한 문서)을 읽어 collabs/<collab_id>.html 을 생성한다. render_topic()과 구조는
+    같지만(수기 종합 문서), '정책 위키'가 MOE 정책 관점으로 묶는 것과 달리 '어느 부처와
+    무엇을 협업했는지' 관점으로 묶는다는 점에서 별도 섹션·디렉터리로 구분해 관리한다."""
+    collab = json.loads((DATA_COLLABS_DIR / f"{collab_id}.json").read_text(encoding="utf-8"))
+
+    toc_items = []
+    body_parts = []
+    for i, sec in enumerate(collab["sections"], 1):
+        anchor = f"sec{i}"
+        toc_items.append(f'      <li><a href="#{anchor}">{esc(sec["heading"])}</a></li>')
+        body_parts.append(f'  <h2 id="{anchor}">{i}. {esc(sec["heading"])}</h2>\n{render_prose(sec["body"])}')
+    toc_items.append('      <li><a href="#related">관련 보도자료</a></li>')
+
+    related_rows = []
+    for seq in collab["related"]:
+        meta = json.loads((DATA_DIR / f"{seq}.meta.json").read_text(encoding="utf-8"))
+        related_rows.append(
+            f'    <a class="doc-card" href="../articles/{seq}.html">'
+            f'<span class="doc-date">{esc(meta.get("date", ""))}</span>'
+            f'<span class="doc-title">{esc(meta["title"])}</span></a>'
+        )
+
+    html_out = COLLAB_PAGE_TEMPLATE.format(
+        css_ver=CSS_VERSION,
+        title=esc(collab["title"]),
+        subtitle=esc(collab.get("subtitle", "")),
+        period=esc(collab.get("period", "")),
+        count=len(collab["related"]),
+        toc_items="\n".join(toc_items),
+        body="\n\n".join(body_parts),
+        related_rows="\n".join(related_rows),
+    )
+    COLLABS_DIR.mkdir(exist_ok=True)
+    out_path = COLLABS_DIR / f"{collab_id}.html"
+    out_path.write_text(html_out, encoding="utf-8")
+    return collab, out_path
+
+
+def _collect_collabs():
+    if not DATA_COLLABS_DIR.exists():
+        return []
+    collabs = [json.loads(f.read_text(encoding="utf-8")) for f in sorted(DATA_COLLABS_DIR.glob("*.json"))]
+    collabs.sort(key=lambda c: c.get("period", ""), reverse=True)
+    return collabs
+
+
 ORG_PAGE_TEMPLATE = """<!doctype html>
 <html lang="ko">
 <head>
@@ -673,6 +761,7 @@ INDEX_TEMPLATE = """<!doctype html>
       · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
       · <strong>교육부 업무계획</strong> — 교육부가 발표한 연간·반기별 업무계획(방향·핵심 과제)을 한 페이지씩 정리했습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
+      · <strong>타부처 협업</strong> — 교육부가 다른 정부 부처와 함께 진행한 협업 사업을, 어느 부처와 무엇을 했는지 관점으로 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
       · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 월별로 나눠서 볼 수 있습니다.
     </p>
@@ -693,6 +782,12 @@ INDEX_TEMPLATE = """<!doctype html>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
   <div class="topic-grid">
 {topic_cards}
+  </div>
+
+  <h2 class="section-label">타부처 협업</h2>
+  <p class="section-desc">교육부가 다른 정부 부처와 함께 진행한 협업 사업을, 어느 부처와 무엇을 했는지 관점으로 정리한 문서입니다.</p>
+  <div class="topic-grid">
+{collab_cards}
   </div>
 
   <h2 class="section-label">분류</h2>
@@ -830,6 +925,7 @@ def rebuild_categories():
 def rebuild_index():
     metas = _collect_metas()
     topics = _collect_topics()
+    collabs = _collect_collabs()
 
     workplan_cards = []
     for wid in WORKPLAN_IDS:
@@ -844,6 +940,14 @@ def rebuild_index():
         f'<div class="topic-card-subtitle">{esc(t.get("subtitle", ""))}</div>'
         f'<span class="topic-card-count">관련 보도자료 {len(t["related"])}건</span></a>'
         for t in topics
+    ]
+
+    collab_cards = [
+        f'    <a class="topic-card" href="collabs/{c["id"]}.html">'
+        f'<div class="topic-card-title">{esc(c["title"])}</div>'
+        f'<div class="topic-card-subtitle">{esc(c.get("subtitle", ""))}</div>'
+        f'<span class="topic-card-count">관련 보도자료 {len(c["related"])}건</span></a>'
+        for c in collabs
     ]
 
     cards = []
@@ -866,6 +970,7 @@ def rebuild_index():
             suggestion_form_url=SUGGESTION_FORM_URL,
             workplan_cards="\n".join(workplan_cards),
             topic_cards="\n".join(topic_cards) if topic_cards else '    <div class="doc-empty">아직 문서 없음</div>',
+            collab_cards="\n".join(collab_cards) if collab_cards else '    <div class="doc-empty">아직 문서 없음</div>',
             category_cards="\n".join(cards),
             rows=rows,
         ),
@@ -906,12 +1011,18 @@ if __name__ == "__main__":
     if sys.argv[1] == "--rebuild-index":
         for t in _collect_topics():
             render_topic(t["id"])
+        for c in _collect_collabs():
+            render_collab(c["id"])
         for wid in WORKPLAN_IDS:
             render_workplan(wid)
         rebuild_categories()
         rebuild_index()
         render_org()
-        print("index.html / categories/*.html / topics/*.html / org.html / workplan-2026.html 갱신 완료")
+        print("index.html / categories/*.html / topics/*.html / collabs/*.html / org.html / workplan-2026.html 갱신 완료")
+    elif sys.argv[1] == "--collab":
+        collab, path = render_collab(sys.argv[2])
+        rebuild_index()
+        print(f"생성됨: {path}")
     elif sys.argv[1] == "--ingest":
         ingest(sys.argv[2])
     elif sys.argv[1] == "--topic":
