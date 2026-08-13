@@ -29,7 +29,7 @@ ORG_DIR = ROOT / "org"
 DATA_TOPICS_DIR = DATA_DIR / "topics"
 CATEGORY_MAP = json.loads((ROOT / "category_map.json").read_text(encoding="utf-8"))
 ORG_CHART = json.loads((ROOT / "org_chart.json").read_text(encoding="utf-8"))
-CSS_VERSION = 9  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
+CSS_VERSION = 8  # style.css 수정할 때마다 올려서 모바일 브라우저 캐시를 무효화한다.
 SUGGESTION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScnEvpD9gdbr80YJziQmLPxqcAkw6V1sgxrQpQk9LidgnqYKw/viewform"
 # 업무계획 문서 id 목록(연간/반기별). data/workplan-<id>.json 하나당 workplan-<id>.html 하나 생성.
 WORKPLAN_IDS = ["2026", "2026-h2"]
@@ -585,284 +585,6 @@ def render_org():
     )
 
 
-# ---------- 정책 지도(policy-map.html): 활동 타임라인 + 업무계획 과제 ↔ 정책 위키 연결망 ----------
-# 정책 위키 9건의 related(관련 보도자료) ID를 그대로 겹치는지만 보고 "연결"로 쓰면, 대부분
-# 5/20 발표된 옴니버스 성과보고(106235) 하나 때문에 생기는 가짜 연결이라(실제로 9개 주제 중
-# 8개가 이 문서 하나로만 서로 얽힘) 신뢰할 수 없다. 대신 워크플랜(data/workplan-*.json)의
-# 각 섹션이 이미 수기로 달아둔 related_topics(그 과제를 실제로 구현하는 정책 위키)를 연결
-# 근거로 쓴다. 정책 위키끼리의 직접 교차 참조는 KEYWORD_LINKS와 같은 방식으로 원문에 실제
-# 있는 문구만 아래 TOPIC_CROSS_REFS에 수기로 등록한다.
-TOPIC_CROSS_REFS = [
-    {
-        "from": "private-education-cost", "to": "early-childhood-care",
-        "note": "private-education-cost 개요가 영유아 사교육 인식개선 캠페인을 early-childhood-care로 안내",
-    },
-]
-
-# 정책 지도 하단 '정책 위키' 노드 나열 순서 — 상단 업무계획 허브와의 연결선이 최대한 덜
-# 겹치도록 수동으로 정했다. 새 정책 위키 주제를 추가하면 이 목록에 없어도 끝에 자동으로
-# 붙지만(_policy_map_topic_order), 선이 꼬이지 않게 하려면 이 목록에도 추가할 것.
-POLICY_MAP_TOPIC_ORDER = [
-    "regional-higher-edu", "advanced-industry-talent", "vocational-edu-innovation",
-    "data-read-our-education", "ai-digital-edu-expansion", "early-childhood-care",
-    "private-education-cost", "korean-language-edu", "special-education-support",
-]
-
-HUB_PREFIX_RE = re.compile(r"^(방향|핵심분야)[①-⑩]\s*")
-
-
-def _policy_map_hubs():
-    """워크플랜의 각 섹션 중 related_topics가 있는 것만 '허브'로 뽑는다. 라벨은 그 섹션의
-    실제 heading 텍스트를 그대로 쓰고 새로 지어내지 않는다."""
-    hubs = []
-    for wid in WORKPLAN_IDS:
-        plan = json.loads((DATA_DIR / f"workplan-{wid}.json").read_text(encoding="utf-8"))
-        for i, sec in enumerate(plan["sections"], 1):
-            related = sec.get("related_topics") or []
-            if not related:
-                continue
-            hubs.append({
-                "heading": sec["heading"],
-                "href": f"workplan-{wid}.html#sec{i}",
-                "plan_title": plan["title"],
-                "topics": [t["id"] for t in related],
-            })
-    return hubs
-
-
-# 네트워크 다이어그램 노드 라벨이 너무 길어 옆 노드와 겹칠 때만 쓰는 축약 라벨.
-# _topic_short_title()의 자동 축약(제목의 " — " 앞부분)으로 충분하지 않은 경우에만 등록한다
-# (예: early-childhood-care는 제목에 " — " 구분자가 없어 전체 제목이 그대로 잡혀 겹침).
-POLICY_MAP_SHORT_LABELS = {
-    "early-childhood-care": "유보통합·돌봄",
-}
-
-
-def _topic_short_title(t: dict) -> str:
-    if t["id"] in POLICY_MAP_SHORT_LABELS:
-        return POLICY_MAP_SHORT_LABELS[t["id"]]
-    return t["title"].split(" — ")[0].strip()
-
-
-def _wrap_label(text: str, max_line: int = 8) -> list[str]:
-    """SVG 노드 라벨용 단순 2줄 줄바꿈(중앙에서 가장 가까운 공백 기준)."""
-    if len(text) <= max_line:
-        return [text]
-    spaces = [i for i, c in enumerate(text) if c == " "]
-    if spaces:
-        mid = len(text) / 2
-        cut = min(spaces, key=lambda i: abs(i - mid))
-        return [text[:cut].strip(), text[cut:].strip()]
-    return [text[:max_line], text[max_line:]]
-
-
-def _policy_map_topic_order(topics: list[dict]) -> list[dict]:
-    by_id = {t["id"]: t for t in topics}
-    ordered = [by_id[i] for i in POLICY_MAP_TOPIC_ORDER if i in by_id]
-    rest = [t for t in topics if t["id"] not in POLICY_MAP_TOPIC_ORDER]
-    return ordered + rest
-
-
-def _policy_map_layout(topics: list[dict], hubs: list[dict], width: float = 860, margin: float = 70):
-    """정책 위키 노드는 고정 순서로 가로 배치하고, 업무계획 허브는 자신이 연결하는 정책들의
-    평균 x좌표 순으로 배치해(연결선이 최대한 덜 꼬이도록) 좌표를 계산한다."""
-    ordered_topics = _policy_map_topic_order(topics)
-    topic_ids = [t["id"] for t in ordered_topics]
-    n = len(topic_ids)
-    step = (width - 2 * margin) / max(n - 1, 1)
-    topic_x = {tid: margin + i * step for i, tid in enumerate(topic_ids)}
-
-    for h in hubs:
-        xs = [topic_x[tid] for tid in h["topics"] if tid in topic_x]
-        h["avg_x"] = sum(xs) / len(xs) if xs else width / 2
-    hubs_sorted = sorted(hubs, key=lambda h: h["avg_x"])
-    m = len(hubs_sorted)
-    hub_step = (width - 2 * margin) / max(m - 1, 1) if m > 1 else 0
-    for i, h in enumerate(hubs_sorted):
-        h["x"] = margin + i * hub_step if m > 1 else width / 2
-
-    return ordered_topics, topic_x, hubs_sorted
-
-
-def _policy_map_network_svg(ordered_topics, topic_x, hubs_sorted, width=860):
-    hub_y, topic_y, height = 55, 230, 300
-    parts = [
-        f'<svg class="pm-network" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
-        f'role="img" aria-label="업무계획 과제와 정책 위키 주제의 연결 관계">'
-    ]
-
-    for h in hubs_sorted:
-        x1, y1 = h["x"], hub_y + 15
-        for tid in h["topics"]:
-            if tid not in topic_x:
-                continue
-            x2, y2 = topic_x[tid], topic_y - 10
-            ymid = (y1 + y2) / 2
-            parts.append(
-                f'<path class="pm-edge" d="M{x1:.1f} {y1:.1f} C{x1:.1f} {ymid:.1f} {x2:.1f} {ymid:.1f} {x2:.1f} {y2:.1f}"/>'
-            )
-
-    for ref in TOPIC_CROSS_REFS:
-        if ref["from"] not in topic_x or ref["to"] not in topic_x:
-            continue
-        x1, x2 = topic_x[ref["from"]], topic_x[ref["to"]]
-        y = topic_y - 10
-        peak = y - 34
-        parts.append(
-            f'<path class="pm-edge pm-edge-ref" d="M{x1:.1f} {y:.1f} C{x1:.1f} {peak:.1f} {x2:.1f} {peak:.1f} {x2:.1f} {y:.1f}">'
-            f'<title>{esc(ref["note"])}</title></path>'
-        )
-
-    for i, h in enumerate(hubs_sorted, 1):
-        x = h["x"]
-        parts.append(
-            f'<a href="{h["href"]}"><g class="pm-hub">'
-            f'<circle cx="{x:.1f}" cy="{hub_y}" r="15"/>'
-            f'<text x="{x:.1f}" y="{hub_y + 5}" text-anchor="middle">{i}</text>'
-            f'<title>{esc(h["plan_title"])} · {esc(h["heading"])}</title>'
-            f'</g></a>'
-        )
-
-    for t in ordered_topics:
-        x = topic_x[t["id"]]
-        lines = _wrap_label(_topic_short_title(t))
-        tspans = "".join(
-            f'<tspan x="{x:.1f}" dy="{0 if j == 0 else 13}">{esc(line)}</tspan>' for j, line in enumerate(lines)
-        )
-        parts.append(
-            f'<a href="topics/{t["id"]}.html"><g class="pm-topic">'
-            f'<circle cx="{x:.1f}" cy="{topic_y}" r="8"/>'
-            f'<text x="{x:.1f}" y="{topic_y + 22}" text-anchor="middle" class="pm-topic-label">{tspans}</text>'
-            f'<title>{esc(t["title"])}</title>'
-            f'</g></a>'
-        )
-
-    parts.append("</svg>")
-    return "\n".join(parts)
-
-
-def _policy_map_timeline_html(metas: list[dict], topics: list[dict]):
-    monthly: dict[str, int] = {}
-    for m in metas:
-        ym = m.get("date", "")[:7]
-        if ym:
-            monthly[ym] = monthly.get(ym, 0) + 1
-    months = sorted(monthly.keys())
-    max_count = max(monthly.values()) if monthly else 1
-
-    bars = []
-    for ym in months:
-        cnt = monthly[ym]
-        pct = round(cnt / max_count * 100)
-        bars.append(
-            '    <div class="pm-bar-col">'
-            f'<div class="pm-bar-count">{cnt}</div>'
-            f'<div class="pm-bar" style="height:{pct}%"></div>'
-            f'<div class="pm-bar-label">{esc(_month_label(ym).replace("년 ", ".").replace("월", ""))}</div>'
-            '</div>'
-        )
-    monthly_html = '  <div class="pm-monthly-chart">\n' + "\n".join(bars) + "\n  </div>"
-
-    date_by_slug = {m["slug"]: m.get("date", "") for m in metas}
-    n_months = len(months)
-    month_index = {ym: i for i, ym in enumerate(months)}
-
-    def frac(d: str) -> float:
-        ym, day = d[:7], int(d[8:10])
-        idx = month_index.get(ym)
-        if idx is None or n_months == 0:
-            return 0.0
-        return (idx + min(day - 1, 30) / 30) / n_months
-
-    ordered_topics = _policy_map_topic_order(topics)
-    rows = []
-    for t in ordered_topics:
-        ds = sorted(date_by_slug[s] for s in t["related"] if date_by_slug.get(s))
-        if not ds:
-            continue
-        left = frac(ds[0]) * 100
-        right = frac(ds[-1]) * 100
-        width_pct = max(right - left, 1.2)
-        rows.append(
-            '    <div class="pm-gantt-row">'
-            f'<a class="pm-gantt-label" href="topics/{t["id"]}.html">{esc(_topic_short_title(t))}</a>'
-            f'<div class="pm-gantt-track"><div class="pm-gantt-bar" style="left:{left:.1f}%;width:{width_pct:.1f}%">'
-            f'<span class="pm-gantt-range">{esc(ds[0])} ~ {esc(ds[-1])}</span></div></div>'
-            '</div>'
-        )
-    gantt_html = '  <div class="pm-gantt">\n' + "\n".join(rows) + "\n  </div>"
-    return monthly_html, gantt_html
-
-
-POLICY_MAP_PAGE_TEMPLATE = """<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>정책 지도 - 교육부 위키</title>
-<link rel="stylesheet" href="assets/style.css?v={css_ver}">
-</head>
-<body>
-<div class="wiki-page">
-  <div class="wiki-breadcrumb"><a href="index.html">교육부 위키</a> &gt; 정책 지도</div>
-  <h1 class="wiki-title">정책 지도</h1>
-  <div class="wiki-subtitle">교육부가 그동안 발표한 정책의 흐름과, 정책 위키 주제들이 업무계획 안에서 어떻게 연결되는지 한눈에 봅니다.</div>
-
-  <h2 id="timeline">그동안의 활동량과 정책별 진행 기간</h2>
-  <p class="section-desc">막대는 월별 보도자료 건수, 아래 띠는 각 정책 위키 주제가 다루는 보도자료들의 발표 기간입니다.{month_caveat}</p>
-  <div class="table-scroll pm-scroll">
-{monthly_chart}
-  </div>
-{gantt}
-
-  <h2 id="network">업무계획 과제 ↔ 정책 위키 연결망</h2>
-  <p class="section-desc">위쪽 번호 노드는 2026년 업무계획(연간·하반기)이 명시한 과제이고, 아래쪽 노드는 정책 위키 주제입니다. 실선은 업무계획이 직접 연결한 정책, 점선은 위키 본문에서 따로 이어둔 정책 간 참조입니다. 두 경우 모두 이미 문서에 있는 연결만 표시하며, 이 페이지가 새로 추론한 관계는 없습니다.</p>
-  <div class="table-scroll pm-scroll">
-{network_svg}
-  </div>
-
-  <ol class="pm-hub-legend">
-{hub_legend}
-  </ol>
-
-  <div class="wiki-footer">
-    <a href="index.html">&larr; 목록으로</a>
-  </div>
-</div>
-</body>
-</html>
-"""
-
-
-def render_policy_map():
-    metas = _collect_metas()
-    topics = _collect_topics()
-    hubs = _policy_map_hubs()
-
-    monthly_chart, gantt = _policy_map_timeline_html(metas, topics)
-    ordered_topics, topic_x, hubs_sorted = _policy_map_layout(topics, hubs)
-    network_svg = _policy_map_network_svg(ordered_topics, topic_x, hubs_sorted)
-    hub_legend = "\n".join(
-        f'    <li><a href="{h["href"]}">{esc(h["plan_title"])} · {esc(h["heading"])}</a></li>'
-        for h in hubs_sorted
-    )
-
-    today = date.today().isoformat()
-    month_caveat = ""
-    if any(m.get("date", "")[:7] == today[:7] for m in metas):
-        month_caveat = " (이번 달은 아직 진행 중이라 다른 달보다 건수가 적게 보일 수 있습니다)"
-
-    html_out = POLICY_MAP_PAGE_TEMPLATE.format(
-        css_ver=CSS_VERSION,
-        month_caveat=month_caveat,
-        monthly_chart=monthly_chart,
-        gantt=gantt,
-        network_svg=network_svg,
-        hub_legend=hub_legend,
-    )
-    (ROOT / "policy-map.html").write_text(html_out, encoding="utf-8")
-
-
 WORKPLAN_PAGE_TEMPLATE = """<!doctype html>
 <html lang="ko">
 <head>
@@ -950,7 +672,6 @@ INDEX_TEMPLATE = """<!doctype html>
       · <strong>익명 제안함</strong> — 이 위키에 대한 의견·건의사항을 로그인 없이 익명으로 남길 수 있습니다.<br>
       · <strong>교육부 조직도</strong> — 실·국·과 단위 조직 체계와 각 부서가 작성한 보도자료 건수를 한눈에 볼 수 있습니다.<br>
       · <strong>교육부 업무계획</strong> — 교육부가 발표한 연간·반기별 업무계획(방향·핵심 과제)을 한 페이지씩 정리했습니다.<br>
-      · <strong>정책 지도</strong> — 그동안의 정책 발표 흐름과, 정책 위키 주제들이 업무계획 과제와 어떻게 연결되는지 시각화로 볼 수 있습니다.<br>
       · <strong>정책 위키</strong> — 여러 보도자료를 하나의 주제로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.<br>
       · <strong>분류</strong> — 초중등교육·고등교육 등 조직 체계를 기준으로 개별 보도자료를 나눠서 볼 수 있습니다.<br>
       · <strong>최신 문서</strong> — 가장 최근에 추가된 보도자료 원문 기반 문서를 월별로 나눠서 볼 수 있습니다.
@@ -967,10 +688,6 @@ INDEX_TEMPLATE = """<!doctype html>
   <h2 class="section-label">교육부 업무계획</h2>
   <p class="section-desc">교육부가 올해 무엇을 하겠다고 밝혔는지, 연간·반기별 업무계획의 방향과 핵심 과제를 한 페이지씩 정리했습니다.</p>
 {workplan_cards}
-
-  <h2 class="section-label">정책 지도</h2>
-  <p class="section-desc">그동안의 정책 발표 흐름과, 정책 위키 주제들이 업무계획 과제와 어떻게 연결되는지 한 페이지에서 볼 수 있습니다.</p>
-  <a class="org-link-card" href="policy-map.html">🗺️ 정책 지도 보기 &rarr;</a>
 
   <h2 class="section-label">정책 위키</h2>
   <p class="section-desc">여러 보도자료를 주제별로 종합해, 교육부가 지금 무엇을 추진하고 있는지 한눈에 볼 수 있도록 정리한 문서입니다.</p>
@@ -1194,8 +911,7 @@ if __name__ == "__main__":
         rebuild_categories()
         rebuild_index()
         render_org()
-        render_policy_map()
-        print("index.html / categories/*.html / topics/*.html / org.html / workplan-2026.html / policy-map.html 갱신 완료")
+        print("index.html / categories/*.html / topics/*.html / org.html / workplan-2026.html 갱신 완료")
     elif sys.argv[1] == "--ingest":
         ingest(sys.argv[2])
     elif sys.argv[1] == "--topic":
